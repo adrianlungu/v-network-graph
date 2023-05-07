@@ -31,10 +31,14 @@ export type ForceLayoutParameters = {
 export class ForceLayout implements LayoutHandler {
   private onDeactivate?: () => void
   private onTick?: () => void
+  private simulation?: d3.Simulation<ForceNodeDatum, ForceEdgeDatum>
+  private parameters?: LayoutActivateParameters
 
   constructor(private options: ForceLayoutParameters = {}) {}
 
   activate(parameters: LayoutActivateParameters): void {
+    this.parameters = parameters
+
     const { nodePositions, nodes, edges, emitter, svgPanZoom } = parameters
     let { nodeLayouts, nodeLayoutMap } = this.buildNodeLayouts(nodes.value, nodePositions, {
       x: 0,
@@ -45,6 +49,7 @@ export class ForceLayout implements LayoutHandler {
       nodeLayouts,
       this.forceLayoutEdges(edges.value, nodes.value)
     )
+    this.simulation = simulation
     this.onTick = () => {
       for (const node of nodeLayouts) {
         const layout = nodePositions.value?.[node.id]
@@ -172,10 +177,19 @@ export class ForceLayout implements LayoutHandler {
     }
   }
 
-  ticked(): void {
+  ticked(ticks: number = 100): void {
+    this.deactivate()
+
+    if (this.parameters)
+      this.activate(this.parameters)
+
+    this.simulation?.alpha(1).stop().tick(ticks)
+
     if (this.onTick) {
       this.onTick()
     }
+
+    this.deactivate()
   }
 
   private createSimulation(
@@ -188,6 +202,7 @@ export class ForceLayout implements LayoutHandler {
       const forceLink = d3.forceLink<ForceNodeDatum, ForceEdgeDatum>(edges).id(d => d.id)
       return d3
         .forceSimulation(nodes)
+        .nodes(nodes)
         .force("edge", forceLink.distance(100))
         .force("charge", d3.forceManyBody())
         .force("collide", d3.forceCollide(50).strength(0.2))
